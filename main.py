@@ -16,7 +16,6 @@ def run_web():
 def keep_alive():
     Thread(target=run_web).start()
 
-
 # --- 📡 Lead Tracker Imports ---
 import praw
 import requests
@@ -26,7 +25,6 @@ import tweepy
 import itertools
 from telethon.sync import TelegramClient
 from telethon.tl.functions.messages import GetHistoryRequest
-
 
 # --- 🔐 Reddit API ---
 REDDIT_CLIENT_ID = "jr0eeEBlgHV019FjqGpZIA"
@@ -41,7 +39,7 @@ SUBREDDITS = [
 BEARER_TOKEN = "AAAAAAAAAAAAAAAAAAAAAGEO3AEAAAAA0y00O1vTqA%2FXnV2SJFlnzIaQAoI%3DWlyv3sNaTaKUeTJd62M19Qeg11IruNaL4ZbyUqanJqriLyKIje"
 
 # --- 🔐 Telegram API ---
-TELEGRAM_API_ID = 29271301  # Replace with your actual API ID
+TELEGRAM_API_ID = 29271301
 TELEGRAM_API_HASH = "5efce68568312af5e01eea891cc75778"
 TELEGRAM_PHONE = "+254769255782"
 TELEGRAM_SESSION = "lead_tracker_session"
@@ -51,17 +49,32 @@ FIREBASE_BASE = "https://lead-tracker-a2181-default-rtdb.firebaseio.com/leads"
 
 # --- 🔍 Keyword Filters ---
 KEYWORDS = {
-    "tutoring": [...],
-    "real_estate": [...],
-    "web_dev": [...],
-    "vehicles": [...]
+    "tutoring": [
+        "need math tutor", "tuition for form", "math revision", "physics tutor",
+        "urgent math help", "kcse revision", "form 4 revision", "biology tuition"
+    ],
+    "real_estate": [
+        "buying land", "selling plot", "plot in mombasa", "real estate mombasa",
+        "land for sale", "plot wanted"
+    ],
+    "web_dev": [
+        "need website", "build app", "looking for developer", "create site",
+        "mobile app", "website developer", "web design", "app for my business"
+    ],
+    "vehicles": [
+        "selling car", "buying car", "sell my car", "car for sale",
+        "toyota for sale", "buy motorbike", "selling motorbike", "selling lorry",
+        "selling truck", "bus for sale", "matatu for sale", "car wanted",
+        "vehicle wanted", "sell motorbike", "car hire kenya", "used car",
+        "subaru for sale", "#carforsaleKenya", "#buycarKenya", "#motorbikeKenya",
+        "#carKenya", "#usedcars"
+    ]
 }
 
 EXCLUDE_PHRASES = [
     "i offer", "my services", "hire me", "i do tutoring", "developer here",
     "available for hire", "i can help", "i provide", "i'm a tutor", "i do web"
 ]
-
 
 # --- ✅ Lead Validator ---
 def is_valid_post(text):
@@ -72,7 +85,6 @@ def is_valid_post(text):
         if any(term in text for term in terms):
             return category
     return None
-
 
 # --- ☁️ Send to Firebase ---
 def post_to_firebase(post_id, lead):
@@ -86,7 +98,6 @@ def post_to_firebase(post_id, lead):
             print(f"✅ Saved: {lead['title']}")
     except Exception as e:
         print("❌ Firebase error:", e)
-
 
 # --- 🔎 Scan Reddit ---
 def scan_reddit():
@@ -117,7 +128,6 @@ def scan_reddit():
                     post_to_firebase(post_id, lead)
         except Exception as e:
             print(f"❌ Reddit error in /r/{sub}:", e)
-
 
 # --- 🔁 Twitter: Rotate Categories Each Run ---
 twitter_category_cycle = itertools.cycle(KEYWORDS.keys())
@@ -155,7 +165,6 @@ def scan_twitter():
             print(f"❌ Twitter error during category {category}: {e}")
     except Exception as e:
         print(f"❌ Failed to authenticate with Twitter API: {e}")
-
 
 # --- 🔎 Scan Telegram ---
 def scan_telegram():
@@ -214,7 +223,6 @@ def scan_telegram():
     except Exception as e:
         print("❌ Telegram connection error:", e)
 
-
 # --- 🔁 Main Loop ---
 def run_combined_tracker():
     while True:
@@ -224,9 +232,7 @@ def run_combined_tracker():
         print("⏸ Waiting 3 minutes...\n")
         time.sleep(180)
 
-
 # --- 🧠 Entry Point ---
 if __name__ == "__main__":
     keep_alive()
     run_combined_tracker()
-
