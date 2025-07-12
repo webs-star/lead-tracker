@@ -1,27 +1,49 @@
+# --- 🟢 Flask keep-alive server ---
+from flask import Flask
+from threading import Thread
+
+app = Flask('')
+
+@app.route('/')
+def home():
+    return "✅ Lead Tracker is running!"
+
+import os
+
+def run_web():
+    port = int(os.environ.get("PORT", 8080))
+    app.run(host='0.0.0.0', port=port)
+
+
+def keep_alive():
+    Thread(target=run_web).start()
+
+
+# --- 📡 Lead Tracker Imports ---
 import praw
 import requests
 import time
 import datetime
 import tweepy
+import itertools
 
-# --- Reddit API ---
+
+# --- 🔐 Reddit API ---
 REDDIT_CLIENT_ID = "jr0eeEBlgHV019FjqGpZIA"
 REDDIT_SECRET = "VvgJtBukWWuoqbzQ0mzAvxaHPsQ3aw"
 REDDIT_USER_AGENT = "lead-tracker:v1.0 by Pristine-Ad-3177"
 SUBREDDITS = [
     "Kenya", "askKenya", "realestate", "freelance", "developers", "webdev",
-     "CarsForSale",  "CarTalk", "mechanicadvice"
+    "CarsForSale", "CarTalk", "mechanicadvice"
 ]
 
+# --- 🔐 Twitter API ---
+BEARER_TOKEN = "AAAAAAAAAAAAAAAAAAAAAGEO3AEAAAAA0y00O1vTqA%2FXnV2SJFlnzIaQAoI%3DWlyv3sNaTaKUeTJd62M19Qeg11IruNaL4ZbyUqanJqriLyKIje"  # Replace with real token or use os.environ['BEARER_TOKEN']
 
-# --- Twitter API ---
-BEARER_TOKEN = "AAAAAAAAAAAAAAAAAAAAAGEO3AEAAAAA0y00O1vTqA%2FXnV2SJFlnzIaQAoI%3DWlyv3sNaTaKUeTJd62M19Qeg11IruNaL4ZbyUqanJqriLyKIje"  # 🔐 Replace this
-
-# --- Firebase ---
+# --- 🔗 Firebase Base URL ---
 FIREBASE_BASE = "https://lead-tracker-a2181-default-rtdb.firebaseio.com/leads"
 
-# --- Filters ---
-
+# --- 🔍 Keyword Filters ---
 KEYWORDS = {
     "tutoring": [
         "need math tutor", "tuition for form", "math revision", "physics tutor",
@@ -36,15 +58,14 @@ KEYWORDS = {
         "mobile app", "website developer", "web design", "app for my business"
     ],
     "vehicles": [
-         "selling car", "buying car", "sell my car", "car for sale",
-    "toyota for sale", "buy motorbike", "selling motorbike", "selling lorry",
-    "selling truck", "bus for sale", "matatu for sale", "car wanted",
-    "vehicle wanted", "sell motorbike", "car hire kenya", "used car",
-    "subaru for sale",
-    "#carforsaleKenya", "#buycarKenya", "#motorbikeKenya", "#carKenya", "#usedcars"
+        "selling car", "buying car", "sell my car", "car for sale",
+        "toyota for sale", "buy motorbike", "selling motorbike", "selling lorry",
+        "selling truck", "bus for sale", "matatu for sale", "car wanted",
+        "vehicle wanted", "sell motorbike", "car hire kenya", "used car",
+        "subaru for sale", "#carforsaleKenya", "#buycarKenya", "#motorbikeKenya",
+        "#carKenya", "#usedcars"
     ]
 }
-
 
 EXCLUDE_PHRASES = [
     "i offer", "my services", "hire me", "i do tutoring", "developer here",
@@ -52,6 +73,7 @@ EXCLUDE_PHRASES = [
 ]
 
 
+# --- ✅ Lead Validator ---
 def is_valid_post(text):
     text = text.lower()
     if any(x in text for x in EXCLUDE_PHRASES):
@@ -62,6 +84,7 @@ def is_valid_post(text):
     return None
 
 
+# --- ☁️ Send to Firebase ---
 def post_to_firebase(post_id, lead):
     url = f"{FIREBASE_BASE}/{post_id}.json"
     if requests.get(url).json():
@@ -75,6 +98,7 @@ def post_to_firebase(post_id, lead):
         print("❌ Firebase error:", e)
 
 
+# --- 🔎 Scan Reddit ---
 def scan_reddit():
     print("\n📥 Scanning Reddit...")
     reddit = praw.Reddit(
@@ -105,14 +129,17 @@ def scan_reddit():
             print(f"❌ Reddit error in /r/{sub}:", e)
 
 
+# --- 🔁 Twitter: Rotate Categories Each Run ---
+twitter_category_cycle = itertools.cycle(KEYWORDS.keys())
+
 def scan_twitter():
     print("\n📥 Scanning Twitter...")
-    client = tweepy.Client(bearer_token=BEARER_TOKEN)
-    queries = {k: " OR ".join(v) for k, v in KEYWORDS.items()}
-
-    for category, query in queries.items():
+    try:
+        client = tweepy.Client(bearer_token=BEARER_TOKEN)
+        category = next(twitter_category_cycle)
+        query = " OR ".join(KEYWORDS[category])
+        print(f"🔍 Searching tweets for: {category}")
         try:
-            print(f"🔍 Searching tweets for: {category}")
             tweets = client.search_recent_tweets(query=query, max_results=10)
             for tweet in tweets.data or []:
                 text = tweet.text
@@ -129,13 +156,18 @@ def scan_twitter():
                         "source": "Twitter"
                     }
                     post_to_firebase(tweet_id, lead)
+            time.sleep(60)  # Wait to avoid hitting rate limits
+        except tweepy.TooManyRequests:
+            print("❌ Rate limit hit: Too Many Requests")
+            print("⏳ Sleeping 15 minutes...")
+            time.sleep(900)
         except Exception as e:
-            print(f"❌ Twitter error: {e}")
-            print("⏳ Sleeping 5 minutes to respect rate limits...")
-            time.sleep(300)
-            break
+            print(f"❌ Twitter error during category {category}: {e}")
+    except Exception as e:
+        print(f"❌ Failed to authenticate with Twitter API: {e}")
 
 
+# --- 🔁 Main Loop ---
 def run_combined_tracker():
     while True:
         scan_reddit()
@@ -144,5 +176,9 @@ def run_combined_tracker():
         time.sleep(180)
 
 
+# --- 🧠 Entry Point ---
 if __name__ == "__main__":
+    keep_alive()         # ✅ Start web server for UptimeRobot
     run_combined_tracker()
+
+
