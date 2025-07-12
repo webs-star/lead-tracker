@@ -1,6 +1,7 @@
 # --- 🟢 Flask keep-alive server ---
 from flask import Flask
 from threading import Thread
+import os
 
 app = Flask('')
 
@@ -8,12 +9,9 @@ app = Flask('')
 def home():
     return "✅ Lead Tracker is running!"
 
-import os
-
 def run_web():
     port = int(os.environ.get("PORT", 8080))
     app.run(host='0.0.0.0', port=port)
-
 
 def keep_alive():
     Thread(target=run_web).start()
@@ -26,6 +24,8 @@ import time
 import datetime
 import tweepy
 import itertools
+from telethon.sync import TelegramClient
+from telethon.tl.functions.messages import GetHistoryRequest
 
 
 # --- 🔐 Reddit API ---
@@ -38,33 +38,23 @@ SUBREDDITS = [
 ]
 
 # --- 🔐 Twitter API ---
-BEARER_TOKEN = "AAAAAAAAAAAAAAAAAAAAAGEO3AEAAAAA0y00O1vTqA%2FXnV2SJFlnzIaQAoI%3DWlyv3sNaTaKUeTJd62M19Qeg11IruNaL4ZbyUqanJqriLyKIje"  # Replace with real token or use os.environ['BEARER_TOKEN']
+BEARER_TOKEN = "AAAAAAAAAAAAAAAAAAAAAGEO3AEAAAAA0y00O1vTqA%2FXnV2SJFlnzIaQAoI%3DWlyv3sNaTaKUeTJd62M19Qeg11IruNaL4ZbyUqanJqriLyKIje"
+
+# --- 🔐 Telegram API ---
+TELEGRAM_API_ID = 29271301  # Replace with your actual API ID
+TELEGRAM_API_HASH = "5efce68568312af5e01eea891cc75778"
+TELEGRAM_PHONE = "+254769255782"
+TELEGRAM_SESSION = "lead_tracker_session"
 
 # --- 🔗 Firebase Base URL ---
 FIREBASE_BASE = "https://lead-tracker-a2181-default-rtdb.firebaseio.com/leads"
 
 # --- 🔍 Keyword Filters ---
 KEYWORDS = {
-    "tutoring": [
-        "need math tutor", "tuition for form", "math revision", "physics tutor",
-        "urgent math help", "kcse revision", "form 4 revision", "biology tuition"
-    ],
-    "real_estate": [
-        "buying land", "selling plot", "plot in mombasa", "real estate mombasa",
-        "land for sale", "plot wanted"
-    ],
-    "web_dev": [
-        "need website", "build app", "looking for developer", "create site",
-        "mobile app", "website developer", "web design", "app for my business"
-    ],
-    "vehicles": [
-        "selling car", "buying car", "sell my car", "car for sale",
-        "toyota for sale", "buy motorbike", "selling motorbike", "selling lorry",
-        "selling truck", "bus for sale", "matatu for sale", "car wanted",
-        "vehicle wanted", "sell motorbike", "car hire kenya", "used car",
-        "subaru for sale", "#carforsaleKenya", "#buycarKenya", "#motorbikeKenya",
-        "#carKenya", "#usedcars"
-    ]
+    "tutoring": [...],
+    "real_estate": [...],
+    "web_dev": [...],
+    "vehicles": [...]
 }
 
 EXCLUDE_PHRASES = [
@@ -156,7 +146,7 @@ def scan_twitter():
                         "source": "Twitter"
                     }
                     post_to_firebase(tweet_id, lead)
-            time.sleep(60)  # Wait to avoid hitting rate limits
+            time.sleep(60)
         except tweepy.TooManyRequests:
             print("❌ Rate limit hit: Too Many Requests")
             print("⏳ Sleeping 15 minutes...")
@@ -167,18 +157,76 @@ def scan_twitter():
         print(f"❌ Failed to authenticate with Twitter API: {e}")
 
 
+# --- 🔎 Scan Telegram ---
+def scan_telegram():
+    print("\n📥 Scanning Telegram...")
+    try:
+        client = TelegramClient(TELEGRAM_SESSION, TELEGRAM_API_ID, TELEGRAM_API_HASH)
+        client.connect()
+
+        if not client.is_user_authorized():
+            print("🔐 Logging in...")
+            client.send_code_request(TELEGRAM_PHONE)
+            code = input("📲 Enter the code from Telegram: ")
+            client.sign_in(TELEGRAM_PHONE, code)
+
+        target_groups = [
+            "https://t.me/kenyajobs",
+            "https://t.me/realestatekenya",
+            "https://t.me/tutorke"
+        ]
+
+        for group in target_groups:
+            try:
+                entity = client.get_entity(group)
+                messages = client(GetHistoryRequest(
+                    peer=entity,
+                    limit=20,
+                    offset_date=None,
+                    offset_id=0,
+                    max_id=0,
+                    min_id=0,
+                    add_offset=0,
+                    hash=0
+                )).messages
+
+                for message in messages:
+                    if hasattr(message, 'message') and message.message:
+                        category = is_valid_post(message.message)
+                        if category:
+                            post_id = f"telegram_{message.id}"
+                            lead = {
+                                "title": message.message,
+                                "url": group,
+                                "subreddit": "N/A",
+                                "author": str(message.from_id.user_id if message.from_id else "Unknown"),
+                                "created_utc": message.date.timestamp(),
+                                "timestamp": time.time(),
+                                "category": category,
+                                "source": "Telegram"
+                            }
+                            post_to_firebase(post_id, lead)
+            except Exception as e:
+                print(f"❌ Error scanning {group}:", e)
+
+        client.disconnect()
+
+    except Exception as e:
+        print("❌ Telegram connection error:", e)
+
+
 # --- 🔁 Main Loop ---
 def run_combined_tracker():
     while True:
         scan_reddit()
         scan_twitter()
+        scan_telegram()
         print("⏸ Waiting 3 minutes...\n")
         time.sleep(180)
 
 
 # --- 🧠 Entry Point ---
 if __name__ == "__main__":
-    keep_alive()         # ✅ Start web server for UptimeRobot
+    keep_alive()
     run_combined_tracker()
-
 
